@@ -4,10 +4,12 @@
 \alias{hodgson}
 \title{Calculate CSR Scores and Assign a CSR Strategy Using the Hodgson et al. (1999) Model}
 \usage{
-hodgson(data, calcLDMC = FALSE, calcSLA = FALSE)
+hodgson(data, calcLDMC = FALSE, calcSLA = FALSE, preferNonGrasses = FALSE)
 }
 \arguments{
-\item{data}{A data frame containing species names and trait data. Must include (LFW and LA optional instead of LDMC and SLA respectively):
+\item{data}{A data frame containing species names and trait data.
+FS determines whether the grass or non-grass version of the model is used.
+LFW and LA may be provided instead of LDMC and SLA, respectively.
 \describe{
   \item{CH}{Canopy height (mm)}
   \item{LDMC}{Leaf dry matter content (\%)}
@@ -17,11 +19,14 @@ hodgson(data, calcLDMC = FALSE, calcSLA = FALSE)
   \item{SLA}{Specific leaf area (mm²/mg)}
   \item{LFW}{Leaf fresh weight (mg)}
   \item{LA}{Leaf area (mm²)}
+  \item{FS}{Flowering start(1-6, 1 = before or during March, 2 = April ... 6 = August or after)}
 }}
 
 \item{calcLDMC}{Logical. Whether to calculate LDMC from LDW and LFW. Default is FALSE.}
 
 \item{calcSLA}{Logical. Whether to calculate SLA from LA and LDW. Default is FALSE.}
+
+\item{preferNonGrasses}{Logical. If TRUE, the function uses the non-grass equations wherever valid FS values (1–6) are present. If FALSE (default), the function uses only the grass equations.}
 }
 \value{
 A data frame with CSR scores (-2.5 to 2.5), CSR percentages (C%, S%, R%), and assigned strategy classification.
@@ -30,6 +35,7 @@ A data frame with CSR scores (-2.5 to 2.5), CSR percentages (C%, S%, R%), and as
 This function calculates and assigns CSR strategy types to plant species
 based on the Hodgson et al. (1999) model, as well as performing
 the required trait transformations for the model.
+It implements two versions of the model (for grasses and non-grasses) and can automatically select the appropriate equations based on the presence of valid flowering start (FS) values.
 }
 \examples{
 # hodgson(exampleData)
