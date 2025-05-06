@@ -31,7 +31,11 @@ morphoPhys <- function(data, calcLDMC = FALSE) {
 
   # column renaming helper function
   renameColumnsMorphophys <- function(data) {
+    # making a list for names = required columns, values are regex patterns that might appear in a data set
+    # list allows for multiple regexes
     renameDict <- list(
+      # e.g. 'species' is the target name, telling the function that the values are equivalent
+      # ^ and $ get exact matches so any word with sp in it will not match, '[._ ]?' matches users choice of spacing
       "species" = c("^species$", "^sp\\.$", "^sp$", "^taxon$", "^species[._ ]?name$", "^taxon[._ ]?name$"),
       "CH" = c("^canopy[._ ]?height$", "^CH$"),
       "LDMC" = c("^leaf[._ ]?dry[._ ]?matter[._ ]?content$", "^LDMC$"),
@@ -44,10 +48,14 @@ morphoPhys <- function(data, calcLDMC = FALSE) {
       "LNC" = c("^leaf[._ ]?nitrogen[._ ]?content$", "^LNC$"),
       "LCC" = c("^leaf[._ ]?carbon[._ ]?concentration$", "^LCC$")
     )
-
+    # for each user column loop through each name in dictionary (renameDict)
     for (colName in names(renameDict)) {
+      # use grep() to find and return user columns matching a single regex patterns
+      # patterns are taken from renameDict[[colName]] and collapsed into one regex string with paste(..., collapse = "|") to work with grep
       matchedCols <- grep(paste(renameDict[[colName]], collapse = "|"), names(data), ignore.case = TRUE, value = TRUE)
+      # if at least one column matches...
       if (length(matchedCols) > 0) {
+        # rename the matching column to the name in the dictionary list
         names(data)[names(data) %in% matchedCols] <- colName
       }
     }
@@ -58,12 +66,12 @@ morphoPhys <- function(data, calcLDMC = FALSE) {
   # rename columns
   data <- renameColumnsMorphophys(data)
 
-  # check species column
+  # check for species column
   if (!"species" %in% names(data)) {
     stop("Data must contain a 'species' column.")
   }
 
-  # required columns
+  # check for required columns
   if (calcLDMC) {
     requiredCols <- c("species", "CH", "FP", "LS", "LDW", "PN", "RD", "LNC", "LCC", "LFW")
   } else {
@@ -76,19 +84,25 @@ morphoPhys <- function(data, calcLDMC = FALSE) {
   }
 
   # remove rows with missing values
+  # pipeline to filter user data through - if any required columns contain na
   missingRows <- data %>% filter(if_any(all_of(requiredCols), ~ is.na(.)))
   if (nrow(missingRows) > 0) {
+    # paste species names of rows with missing values into a vector then collapse into a string to be readable
+    # e.g. (from c("species1",... to species1,...))
     removedSpecies <- paste(unique(missingRows$species), collapse = ", ")
+    # display warning
     warning(sprintf(
       "%d row(s) removed due to missing trait values. affected species: %s",
       nrow(missingRows),
       removedSpecies
     ))
   }
+  # anti_join to keep rows that do not match defined missingrows based on species column
   data <- anti_join(data, missingRows, by = "species")
 
   # ldmc calculation
   if (calcLDMC) {
+    # pipeline to add new LDMC column via mutate
     data <- data %>% mutate(LDMC = (LDW * 100) / LFW)
   }
 
@@ -136,6 +150,7 @@ morphoPhys <- function(data, calcLDMC = FALSE) {
       rRaw = 100 * (rScore + 2) / denom,
 
       # clip any negative results to zero
+      # pmax takes largest value, i.e. if cRaw = < 0, take 0
       cClipped = pmax(0, cRaw),
       sClipped = pmax(0, sRaw),
       rClipped = pmax(0, rRaw),
@@ -147,13 +162,16 @@ morphoPhys <- function(data, calcLDMC = FALSE) {
       positiveCount = (cClipped > 0) + (sClipped > 0) + (rClipped > 0),
 
       # redistribute lost percentage evenly to non-zero axes
+      # e.g. if cClipped is bigger than 0, + the deficit divided by the amount of columns that aren't being clipped to be even.
       cPercent = cClipped + ifelse(cClipped > 0, deficit / positiveCount, 0),
       sPercent = sClipped + ifelse(sClipped > 0, deficit / positiveCount, 0),
       rPercent = rClipped + ifelse(rClipped > 0, deficit / positiveCount, 0)
     ) %>%
+    # select, - means exclude that, so select the column that isn't raw, clipped etc. leaving cPercent, sPercent and rPercent, removes all other columns
     select(-denom, -ends_with("Raw"), -ends_with("Clipped"), -deficit, -positiveCount)
 
   # strategy classification
+  # create a data frame to assign CSR value Strategy classes
   csrReference <- data.frame(
     strategy = c("C", "C/CR", "C/CS", "CR", "C/CSR", "CS", "CR/CSR", "CS/CSR", "R/CR",
                  "CSR", "S/CS", "R/CSR", "S/CSR", "R", "SR/CSR", "S", "R/SR", "S/SR", "SR"),
@@ -161,22 +179,26 @@ morphoPhys <- function(data, calcLDMC = FALSE) {
     sRef = c(-2, -2, -1, -2, -1, 0, -1, 0, -2, 0, 1, -1, 1, -2, 0, 2, -1, 1, 0),
     rRef = c(-2, -1, -2, 0, -1, -2, 0, -1, 1, 0, -2, 1, -1, 2, 0, -2, 1, -1, 0)
   )
-
+  # classify function for c s and r scores (in use c = cScore etc.)
   classifySpecies <- function(c, s, r) {
+    # distance between c s and r scores (coordinates) and reference c s and r from referencde data frame
     distances <- sqrt((csrReference$cRef - c)^2 + (csrReference$sRef - s)^2 + (csrReference$rRef - r)^2)
+    # which.min finds row number with smallest variance, variance$strategy[] - square brackets get the value from that row
     return(csrReference$strategy[which.min(distances)])
   }
 
   calculations <- calculations %>%
+    # apply by row instead of whole column
     rowwise() %>%
     mutate(strategyClass = classifySpecies(cScore, sScore, rScore)) %>%
+    # ungroup from rowwise back to column based
     ungroup()
 
-  # output columns
+  # define the output columns
   outputCols <- c("cScore", "sScore", "rScore", "cPercent", "sPercent", "rPercent", "strategyClass")
   if (calcLDMC) outputCols <- c("LDMC", outputCols)
 
-  # combine with original data
+  # combine calculations columns with user data via cbind
   finalResult <- cbind(
     data,
     calculations %>% dplyr::select(dplyr::any_of(outputCols))

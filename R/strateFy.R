@@ -23,7 +23,11 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
 
   # column renaming helper function
   renameColumnsStratefy <- function(data) {
+    # making a list for names = required columns, values are regex patterns that might appear in a data set
+    # list allows for multiple regexes
     renameDict <- list(
+      # e.g. 'species' is the target name, telling the function that the values are equivalent
+      # ^ and $ get exact matches so any word with sp in it will not match, '[._ ]?' matches users choice of spacing
       "species" = c("^species$", "^sp\\.$", "^sp$", "^taxon$", "^species[._ ]?name$", "^taxon[._ ]?name$"),
       "LA" = c("^leaf[._ ]?area$", "^LA$"),
       "LFW" = c("^leaf[._ ]?fresh[._ ]?weight$", "^LFW$"),
@@ -31,10 +35,14 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
       "SLA" = c("^specific[._ ]?leaf[._ ]?area$", "^SLA$"),
       "LDMC" = c("^leaf[._ ]?dry[._ ]?matter[._ ]?content$", "^LDMC$")
     )
-
+# for each user column loop through each name in dictionary (renameDict)
     for (colName in names(renameDict)) {
+      # use grep() to find and return user columns matching a single regex patterns
+      # patterns are taken from renameDict[[colName]] and collapsed into one regex string with paste(..., collapse = "|") to work with grep
       matchedCols <- grep(paste(renameDict[[colName]], collapse = "|"), names(data), ignore.case = TRUE, value = TRUE)
+      # if at least one column matches...
       if (length(matchedCols) > 0) {
+        # rename the matching column to the name in the dictionary list
         names(data)[names(data) %in% matchedCols] <- colName
       }
     }
@@ -45,12 +53,12 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
   # rename columns
   data <- renameColumnsStratefy(data)
 
-  # check species column
+  # check for species column
   if (!"species" %in% names(data)) {
     stop("Data must contain a 'species' column")
   }
 
-  # required columns
+  # defining the required columns
   if (calcSLA && calcLDMC) {
     requiredCols <- c("species", "LA", "LFW", "LDW")
   } else if (calcSLA) {
@@ -61,25 +69,31 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
     requiredCols <- c("species", "LA", "SLA", "LDMC")
   }
 
-  # check column presence
+  # check for the required columns presence
   if (!all(requiredCols %in% names(data))) {
     stop(paste("Data must contain:", paste(requiredCols, collapse = ", ")))
   }
 
   # remove rows with missing values
+  # pipeline to filter user data through - if any required columns contain na
   missingRows <- data %>% filter(if_any(all_of(requiredCols), ~ is.na(.)))
   if (nrow(missingRows) > 0) {
+    # paste species names of rows with missing values into a vector then collapse into a string to be readable
+    # e.g. (from c("species1",... to species1,...))
     removedSpecies <- paste(unique(missingRows$species), collapse = ", ")
+    # display warning
     warning(sprintf(
       "%d row(s) removed due to missing trait values. affected species: %s",
       nrow(missingRows),
       removedSpecies
     ))
   }
+  # anti_join to keep rows that do not match defined missingrows based on species column
   data <- anti_join(data, missingRows, by = "species")
 
   # sla calculation
   if (calcSLA) {
+    # pipeline to add new SLA column via mutate
     data <- data %>% mutate(SLA = LA / LDW)
   }
 
@@ -110,6 +124,7 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
       # c axis calculation
       sqrtMaxLA = sqrt(LA / 894205) * 100,
       pca2C = -0.8678 + 1.6464 * sqrtMaxLA,
+      # pmin and pmax return the smaller or larger of the two values (e.g. for pmax if pca2c is smaller that mincdim return the mincdim)
       pca2C = pmin(pmax(pca2C, minCDim), maxCDim),
       cTrans = pca2C + posTranslationCoefC,
       cRange = maxCDim + posTranslationCoefC,
@@ -117,6 +132,7 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
 
       # s axis calculation
       logitLdmc = log((LDMC / 100) / (1 - (LDMC / 100))),
+      # exp = e raised to the power of (x), e.g. e^(-0.2328 * logitLdmc)
       pca1S = 1.3369 + 0.000010019 * (1 - exp(-2.2303e-12 * logitLdmc)) + 4.5835 * (1 - exp(-0.2328 * logitLdmc)),
       pca1S = pmin(pmax(pca1S, minSDim), maxSDim),
       sTrans = pca1S + posTranslationCoefS,
@@ -139,6 +155,7 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
     )
 
   # strategy classification
+  # create a data frame to assign CSR value Strategy classes
   zoneValues <- data.frame(
     strategy = c("C", "C/CR", "C/CS", "CR", "C/CSR", "CS", "CR/CSR", "CS/CSR", "R/CR",
                  "CSR", "S/CS", "R/CSR", "S/CSR", "R", "SR/CSR", "S", "R/SR", "S/SR", "SR"),
@@ -147,29 +164,37 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
     R = c(5, 23, 5, 48, 23, 5, 42, 17, 73, 33, 5, 54, 23, 90, 42, 5, 73, 23, 48)
   )
 
+  # pipeline to calculate closest strategy for each row of the users data set based on C S and R %s
   calculations <- calculations %>%
+    # apply by row instead of whole column
     rowwise() %>%
+    # create class column
     mutate(
       strategyClass = {
+        # temp data frame called variances based on earlier zonevalues data frame with predefined strategies
         variances <- zoneValues %>%
+          # add column to temp dataframe calculating variance between CSR %s and predefined values
           mutate(
             variance = (cPercent - C)^2 +
               (sPercent - S)^2 +
               (rPercent - R)^2
           )
+        # which.min finds row number with smallest variance, variance$strategy[] - square brackets get the value from that row
         variances$strategy[which.min(variances$variance)]
       }
     ) %>%
+    # ungroup from rowwise back to column based
     ungroup()
 
-  # output columns
+  # define the output columns
   outputCols <- c("cPercent", "sPercent", "rPercent", "strategyClass")
   if (calcSLA) outputCols <- c("SLA", outputCols)
   if (calcLDMC) outputCols <- c("LDMC", "succulenceIndex", outputCols)
 
-  # combine with original data
+  # combine calculations columns with user data frame via cbind
   finalResult <- cbind(
     data,
+    # select any of the outputcols, as they will only exist if conditionals are met
     calculations %>% dplyr::select(dplyr::any_of(outputCols))
   )
 
