@@ -64,7 +64,7 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
   } else if (calcSLA) {
     requiredCols <- c("species", "LA", "LDW", "LDMC")
   } else if (calcLDMC) {
-    requiredCols <- c("species", "LA", "LFW", "SLA")
+    requiredCols <- c("species", "LA", "LFW", "LDW", "SLA") # changed to need all three + SLA
   } else {
     requiredCols <- c("species", "LA", "SLA", "LDMC")
   }
@@ -179,12 +179,20 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
               (sPercent - S)^2 +
               (rPercent - R)^2
           )
-        # which.min finds row number with smallest variance, variance$strategy[] - square brackets get the value from that row
-        variances$strategy[which.min(variances$variance)]
+
+        # handle the case where all variances are NA or which.min has nothing to return
+        idx <- which.min(variances$variance)
+
+        if (length(idx) == 0 || all(is.na(variances$variance))) {
+          NA_character_                # no valid minimum -> return NA instead of crashing
+        } else {
+          variances$strategy[idx]      # normal case: nearest strategy
+        }
       }
     ) %>%
     # ungroup from rowwise back to column based
     ungroup()
+
 
   # define the output columns
   outputCols <- c("cPercent", "sPercent", "rPercent", "strategyClass")
@@ -197,6 +205,21 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
     # select any of the outputcols, as they will only exist if conditionals are met
     calculations %>% dplyr::select(dplyr::any_of(outputCols))
   )
+
+  # identify any rows where csr values or strategy class are missing
+  invalidRows <- finalResult %>%
+    dplyr::filter(
+      is.na(cPercent) | is.na(sPercent) | is.na(rPercent) | is.na(strategyClass)
+    )
+
+  # display warning listing affected species if any invalid rows are present
+  if (nrow(invalidRows) > 0) {
+    warning(sprintf(
+      "%d row(s) have NA CSR values or strategyClass. affected species: %s",
+      nrow(invalidRows),
+      paste(unique(invalidRows$species), collapse = ", ")
+    ))
+  }
 
   return(finalResult)
 }

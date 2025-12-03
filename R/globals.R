@@ -11,5 +11,7 @@ utils::globalVariables(c(
   "rClipped", "rPercent", "rPositiveTranslation", "rRange", "rRaw", "rScore", "rTrans",
   "rawC", "rawR", "rawS", "rdTransformed", "sClipped", "sPercent", "sPositiveTranslation",
   "sRange", "sRaw", "sScore", "sTrans", "sla", "slaPr", "slaTransformed", "sqrtMaxLA",
-  "strategyClass", "succulenceIndex", "variance"
+  "strategyClass", "succulenceIndex", "variance",
+  "fsPr", "cScoreRaw", "sScoreRaw", "rScoreRaw", "csrReference"
 ))
+

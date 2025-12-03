@@ -181,11 +181,21 @@ morphoPhys <- function(data, calcLDMC = FALSE) {
   )
   # classify function for c s and r scores (in use c = cScore etc.)
   classifySpecies <- function(c, s, r) {
-    # distance between c s and r scores (coordinates) and reference c s and r from referencde data frame
-    distances <- sqrt((csrReference$cRef - c)^2 + (csrReference$sRef - s)^2 + (csrReference$rRef - r)^2)
-    # which.min finds row number with smallest variance, variance$strategy[] - square brackets get the value from that row
+
+    # If any of the scores are NA, we cannot classify → return NA instead of crashing
+    if (any(is.na(c(c, s, r)))) {
+      return(NA_character_)
+    }
+
+    # distance between c s and r scores (coordinates) and reference c s and r from reference data frame
+    distances <- sqrt((csrReference$cRef - c)^2 +
+                        (csrReference$sRef - s)^2 +
+                        (csrReference$rRef - r)^2)
+
+    # which.min finds row number with smallest distance, return the corresponding strategy
     return(csrReference$strategy[which.min(distances)])
   }
+
 
   calculations <- calculations %>%
     # apply by row instead of whole column
@@ -203,6 +213,21 @@ morphoPhys <- function(data, calcLDMC = FALSE) {
     data,
     calculations %>% dplyr::select(dplyr::any_of(outputCols))
   )
+
+  # identify any rows where csr values or strategy class are missing
+  invalidRows <- finalResult %>%
+    dplyr::filter(
+      is.na(cPercent) | is.na(sPercent) | is.na(rPercent) | is.na(strategyClass)
+    )
+
+  # display warning listing affected species if any invalid rows are present
+  if (nrow(invalidRows) > 0) {
+    warning(sprintf(
+      "%d row(s) have NA CSR values or strategyClass. affected species: %s",
+      nrow(invalidRows),
+      paste(unique(invalidRows$species), collapse = ", ")
+    ))
+  }
 
   return(finalResult)
 }

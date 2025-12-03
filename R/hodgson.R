@@ -126,7 +126,7 @@ hodgson <- function(data, calcLDMC = FALSE, calcSLA = FALSE, preferNonGrasses = 
       ),
       ldmcPr = sqrt(LDMC),
       fpPr   = FP,
-      fsPr   = suppressWarnings(as.numeric(as.character(FS))),
+      fsPr   = fsNumeric, # changed from: suppressWarnings(as.numeric(as.character(FS))),
       lsPr   = LS,
       ldwPr  = log(LDW) + 3,
       slaPr  = sqrt(SLA)
@@ -179,7 +179,7 @@ hodgson <- function(data, calcLDMC = FALSE, calcSLA = FALSE, preferNonGrasses = 
 
   # strategy classification
   # create a data frame to assign CSR value Strategy classes
-  ref <- data.frame(
+  csrReference <- data.frame(
     strategy = c("C", "C/CR", "C/SC", "CR", "C/CSR", "SC", "CR/CSR", "SC/CSR", "R/CR",
                  "CSR", "S/SC", "R/CSR", "S/CSR", "R", "SR/CSR", "S", "R/SR", "S/SR", "SR"),
     cRef = c(2, 1, 1, 0, 1, 0, 0, 0, -1, 0, -1, -1, -1, -2, -1, -2, -2, -2, -2),
@@ -187,17 +187,27 @@ hodgson <- function(data, calcLDMC = FALSE, calcSLA = FALSE, preferNonGrasses = 
     rRef = c(-2, -1, -2, 0, -1, -2, 0, -1, 1, 0, -2, 1, -1, 2, 0, -2, 1, -1, 0)
   )
   # classify function for c s and r scores (in use c = cScore etc.)
-  classify <- function(c, s, r) {
-    # distance between c s and r scores (coordinates) and reference c s and r from referencde data frame
-    d <- sqrt((ref$cRef - c)^2 + (ref$sRef - s)^2 + (ref$rRef - r)^2)
-    # which.min finds row number with smallest distance, square brackets to return strategy name out of ref data frame
-    ref$strategy[which.min(d)]
+  classifySpecies <- function(c, s, r) {
+
+    # If any of the scores are NA, we cannot classify → return NA instead of crashing
+    if (any(is.na(c(c, s, r)))) {
+      return(NA_character_)
+    }
+
+    # distance between c s and r scores (coordinates) and reference c s and r from reference data frame
+    distances <- sqrt((csrReference$cRef - c)^2 +
+                        (csrReference$sRef - s)^2 +
+                        (csrReference$rRef - r)^2)
+
+    # which.min finds row number with smallest distance, return the corresponding strategy
+    return(csrReference$strategy[which.min(distances)])
   }
+
 
   transformed <- transformed %>%
     rowwise() %>%
     # applying classify function to the transformed data scores. add column to data set
-    mutate(strategyClass = classify(cScore, sScore, rScore)) %>%
+    mutate(strategyClass = classifySpecies(cScore, sScore, rScore)) %>%
     ungroup()
 
   # optional model version column
@@ -215,6 +225,21 @@ hodgson <- function(data, calcLDMC = FALSE, calcSLA = FALSE, preferNonGrasses = 
   }
 
   result <- cbind(data, transformed %>% dplyr::select(dplyr::any_of(outCols)))
+
+  # identify any rows where csr values or strategy class are missing
+  invalidRows <- result %>%
+    dplyr::filter(
+      is.na(cPercent) | is.na(sPercent) | is.na(rPercent) | is.na(strategyClass)
+    )
+
+  # display warning listing affected species if any invalid rows are present
+  if (nrow(invalidRows) > 0) {
+    warning(sprintf(
+      "%d row(s) have NA CSR values or strategyClass. affected species: %s",
+      nrow(invalidRows),
+      paste(unique(invalidRows$species), collapse = ", ")
+    ))
+  }
+
   return(result)
 }
-
