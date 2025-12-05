@@ -208,11 +208,15 @@ morphoPhys <- function(data, calcLDMC = FALSE) {
   outputCols <- c("cScore", "sScore", "rScore", "cPercent", "sPercent", "rPercent", "strategyClass")
   if (calcLDMC) outputCols <- c("LDMC", outputCols)
 
-  # combine calculations columns with user data via cbind
+  # determine which columns from `calculations` are NOT already in `data`
+  extraCols <- setdiff(outputCols, names(data))
+
+  # combine only those non-duplicate columns
   finalResult <- cbind(
     data,
-    calculations %>% dplyr::select(dplyr::any_of(outputCols))
+    calculations %>% dplyr::select(dplyr::any_of(extraCols))
   )
+
 
   # identify any rows where csr values or strategy class are missing
   invalidRows <- finalResult %>%

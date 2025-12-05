@@ -199,11 +199,13 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
   if (calcSLA) outputCols <- c("SLA", outputCols)
   if (calcLDMC) outputCols <- c("LDMC", "succulenceIndex", outputCols)
 
-  # combine calculations columns with user data frame via cbind
+  # determine which columns from `calculations` are NOT already in `data`
+  extraCols <- setdiff(outputCols, names(data))
+
+  # combine only those non-duplicate columns
   finalResult <- cbind(
     data,
-    # select any of the outputcols, as they will only exist if conditionals are met
-    calculations %>% dplyr::select(dplyr::any_of(outputCols))
+    calculations %>% dplyr::select(dplyr::any_of(extraCols))
   )
 
   # identify any rows where csr values or strategy class are missing

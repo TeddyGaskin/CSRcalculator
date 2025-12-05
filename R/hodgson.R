@@ -224,7 +224,14 @@ hodgson <- function(data, calcLDMC = FALSE, calcSLA = FALSE, preferNonGrasses = 
     outCols <- c("hodgsonModelVersion", outCols)
   }
 
-  result <- cbind(data, transformed %>% dplyr::select(dplyr::any_of(outCols)))
+  # determine which columns from transformed are NOT already in data
+  extraCols <- setdiff(outCols, names(data))
+
+  # combine without creating duplicate columns
+  result <- cbind(
+    data,
+    transformed %>% dplyr::select(dplyr::any_of(extraCols))
+  )
 
   # identify any rows where csr values or strategy class are missing
   invalidRows <- result %>%
