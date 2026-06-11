@@ -98,8 +98,12 @@ hodgson <- function(data, calcLDMC = FALSE, calcSLA = FALSE, preferNonGrasses = 
       removedSpecies
     ))
   }
-  # anti_join to keep rows that do not match defined missingrows based on species column
-  data <- anti_join(data, missingRows, by = "species")
+  # keep rows complete across all required columns, filtered row-by-row so a complete row isn't dropped because a duplicate-named row was incomplete
+  data <- data %>% filter(if_all(all_of(requiredCols), ~ !is.na(.)))
+
+  if (nrow(data) == 0) {
+    stop("No rows remaining after removing missing values.")
+  }
 
   # optional LDMC and SLA calculations
   # adding columns via mutate
