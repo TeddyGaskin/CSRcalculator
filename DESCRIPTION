@@ -1,7 +1,7 @@
 Package: CSRcalculator
 Type: Package
 Title: Calculation and Assignment of CSR Plant Strategies Using Multiple Models
-Version: 0.1.4
+Version: 1.0.1
 Author: Teddy Gaskin
 Maintainer: Teddy Gaskin <teddygaskin@gmail.com>
 Description: Provides functions to calculate and assign plant strategies based on the CSR framework (competitor, stress-tolerator, ruderal), using three models: StrateFy (Pierce et al. 2017), the morphophysiological model (Novakovskiy et al. 2016), and Hodgson et al.'s (1999) original model.
