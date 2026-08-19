@@ -19,13 +19,10 @@
 #' }
 #' @param calcLDMC Logical. Whether to calculate LDMC from LDW and LFW. Default is FALSE.
 #'
-#' @return A data frame with transformed traits, CSR percentages (C%, S%, R%), strategy classification and optional trait calculations.
+#' @return A data frame with transformed traits, CSR percentages (C\%, S\%, R\%), strategy classification and optional trait calculations.
 #'
 #' @import dplyr
 #' @export
-#'
-#' @examples
-#' # morphoPhys(exampleData)
 
 morphoPhys <- function(data, calcLDMC = FALSE) {
 
@@ -97,8 +94,12 @@ morphoPhys <- function(data, calcLDMC = FALSE) {
       removedSpecies
     ))
   }
-  # anti_join to keep rows that do not match defined missingrows based on species column
-  data <- anti_join(data, missingRows, by = "species")
+  # keep rows complete across all required columns, filtered row-by-row so a complete row isn't dropped because a duplicate-named row was incomplete
+  data <- data %>% filter(if_all(all_of(requiredCols), ~ !is.na(.)))
+
+  if (nrow(data) == 0) {
+    stop("No rows remaining after removing missing values.")
+  }
 
   # ldmc calculation
   if (calcLDMC) {
@@ -140,35 +141,14 @@ morphoPhys <- function(data, calcLDMC = FALSE) {
       rScore = ((pca1 * 1.091) + (pca2 * -0.661)) / 1.276
     )
 
-  # convert scores to percentages
+  # convert to percentages
   calculations <- calculations %>%
     mutate(
-      # offset raw scores into positive range and convert to %
-      denom = cScore + sScore + rScore + 6,
-      cRaw = 100 * (cScore + 2) / denom,
-      sRaw = 100 * (sScore + 2) / denom,
-      rRaw = 100 * (rScore + 2) / denom,
-
-      # clip any negative results to zero
-      # pmax takes largest value, i.e. if cRaw = < 0, take 0
-      cClipped = pmax(0, cRaw),
-      sClipped = pmax(0, sRaw),
-      rClipped = pmax(0, rRaw),
-
-      # calculate how much total % was lost due to clipping
-      deficit = 100 - (cClipped + sClipped + rClipped),
-
-      # count how many axes had positive values (to share deficit across)
-      positiveCount = (cClipped > 0) + (sClipped > 0) + (rClipped > 0),
-
-      # redistribute lost percentage evenly to non-zero axes
-      # e.g. if cClipped is bigger than 0, + the deficit divided by the amount of columns that aren't being clipped to be even.
-      cPercent = cClipped + ifelse(cClipped > 0, deficit / positiveCount, 0),
-      sPercent = sClipped + ifelse(sClipped > 0, deficit / positiveCount, 0),
-      rPercent = rClipped + ifelse(rClipped > 0, deficit / positiveCount, 0)
-    ) %>%
-    # select, - means exclude that, so select the column that isn't raw, clipped etc. leaving cPercent, sPercent and rPercent, removes all other columns
-    select(-denom, -ends_with("Raw"), -ends_with("Clipped"), -deficit, -positiveCount)
+      # clip each offset axis at zero, then rescale survivors proportionally to sum to 100
+      cPercent = 100 * pmax(0, cScore + 2) / (pmax(0, cScore + 2) + pmax(0, sScore + 2) + pmax(0, rScore + 2)),
+      sPercent = 100 * pmax(0, sScore + 2) / (pmax(0, cScore + 2) + pmax(0, sScore + 2) + pmax(0, rScore + 2)),
+      rPercent = 100 * pmax(0, rScore + 2) / (pmax(0, cScore + 2) + pmax(0, sScore + 2) + pmax(0, rScore + 2))
+    )
 
   # strategy classification
   # create a data frame to assign CSR value Strategy classes

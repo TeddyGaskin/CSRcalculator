@@ -29,14 +29,11 @@ LFW and LA may be provided instead of LDMC and SLA, respectively.
 \item{preferNonGrasses}{Logical. If TRUE, the function uses the non-grass equations wherever valid FS values (1–6) are present. If FALSE (default), the function uses only the grass equations.}
 }
 \value{
-A data frame with CSR scores (-2.5 to 2.5), CSR percentages (C%, S%, R%), and assigned strategy classification.
+A data frame with CSR scores (-2.5 to 2.5), CSR percentages (C\%, S\%, R\%), and assigned strategy classification.
 }
 \description{
 This function calculates and assigns CSR strategy types to plant species
 based on the Hodgson et al. (1999) model, as well as performing
 the required trait transformations for the model.
 It implements two versions of the model (for grasses and non-grasses) and can automatically select the appropriate equations based on the presence of valid flowering start (FS) values.
-}
-\examples{
-# hodgson(exampleData)
 }

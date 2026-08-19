@@ -24,13 +24,10 @@ morphoPhys(data, calcLDMC = FALSE)
 \item{calcLDMC}{Logical. Whether to calculate LDMC from LDW and LFW. Default is FALSE.}
 }
 \value{
-A data frame with transformed traits, CSR percentages (C%, S%, R%), strategy classification and optional trait calculations.
+A data frame with transformed traits, CSR percentages (C\%, S\%, R\%), strategy classification and optional trait calculations.
 }
 \description{
 This function calculates and assigns CSR strategy types to plant species
 based on the morphophysiological CSR model by Novakovskiy et al. (2016), as well as performing
 the required trait transformations for the model.
-}
-\examples{
-# morphoPhys(exampleData)
 }

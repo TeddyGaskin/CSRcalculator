@@ -23,13 +23,10 @@
 #' @param calcSLA Logical. Whether to calculate SLA from LA and LDW. Default is FALSE.
 #' @param preferNonGrasses Logical. If TRUE, the function uses the non-grass equations wherever valid FS values (1–6) are present. If FALSE (default), the function uses only the grass equations.
 #'
-#' @return A data frame with CSR scores (-2.5 to 2.5), CSR percentages (C%, S%, R%), and assigned strategy classification.
+#' @return A data frame with CSR scores (-2.5 to 2.5), CSR percentages (C\%, S\%, R\%), and assigned strategy classification.
 #'
 #' @import dplyr
 #' @export
-#'
-#' @examples
-#' # hodgson(exampleData)
 
 hodgson <- function(data, calcLDMC = FALSE, calcSLA = FALSE, preferNonGrasses = FALSE) {
   # column renaming helper function
@@ -98,8 +95,12 @@ hodgson <- function(data, calcLDMC = FALSE, calcSLA = FALSE, preferNonGrasses = 
       removedSpecies
     ))
   }
-  # anti_join to keep rows that do not match defined missingrows based on species column
-  data <- anti_join(data, missingRows, by = "species")
+  # keep rows complete across all required columns, filtered row-by-row so a complete row isn't dropped because a duplicate-named row was incomplete
+  data <- data %>% filter(if_all(all_of(requiredCols), ~ !is.na(.)))
+
+  if (nrow(data) == 0) {
+    stop("No rows remaining after removing missing values.")
+  }
 
   # optional LDMC and SLA calculations
   # adding columns via mutate

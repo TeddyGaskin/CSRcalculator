@@ -4,7 +4,13 @@
 \alias{strateFy}
 \title{Calculate CSR Scores and Assign a CSR Strategy Using the StrateFy Model (Pierce et al. 2017)}
 \usage{
-strateFy(data, calcSLA = TRUE, calcLDMC = TRUE)
+strateFy(
+  data,
+  calcSLA = TRUE,
+  calcLDMC = TRUE,
+  useSucculenceRule = TRUE,
+  succulenceThreshold = 5
+)
 }
 \arguments{
 \item{data}{A data frame containing species names and trait data. Must include either:
@@ -16,14 +22,18 @@ strateFy(data, calcSLA = TRUE, calcLDMC = TRUE)
 \item{calcSLA}{Logical. Whether to calculate SLA if not provided. Default is TRUE.}
 
 \item{calcLDMC}{Logical. Whether to calculate LDMC if not provided. Default is TRUE.}
+
+\item{useSucculenceRule}{Logical. Whether to apply the succulence rule when calculating LDMC.
+When TRUE, leaves with a succulence index above \code{succulenceThreshold} use a corrected LDMC formula.
+Only relevant when \code{calcLDMC = TRUE}. Default is TRUE.}
+
+\item{succulenceThreshold}{Numeric. The succulence index threshold above which the corrected LDMC formula is applied.
+Only used when \code{useSucculenceRule = TRUE}. Default is 5.}
 }
 \value{
-A data frame with calculated CSR percentages (C%, S%, R%), strategy classification, and optionally SLA, LDMC, and succulence index.
+A data frame with calculated CSR percentages (C\%, S\%, R\%), strategy classification, and optionally SLA, LDMC, and succulence index.
 }
 \description{
 This function calculates and assigns CSR strategy types to plant species
 based on the StrateFy model, as well as calculating required leaf traits for the model.
-}
-\examples{
-# strateFy(exampleData)
 }

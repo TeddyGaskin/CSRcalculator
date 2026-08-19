@@ -10,16 +10,18 @@
 #' }
 #' @param calcSLA Logical. Whether to calculate SLA if not provided. Default is TRUE.
 #' @param calcLDMC Logical. Whether to calculate LDMC if not provided. Default is TRUE.
+#' @param useSucculenceRule Logical. Whether to apply the succulence rule when calculating LDMC.
+#'  When TRUE, leaves with a succulence index above \code{succulenceThreshold} use a corrected LDMC formula.
+#'  Only relevant when \code{calcLDMC = TRUE}. Default is TRUE.
+#' @param succulenceThreshold Numeric. The succulence index threshold above which the corrected LDMC formula is applied.
+#'  Only used when \code{useSucculenceRule = TRUE}. Default is 5.
 #'
-#' @return A data frame with calculated CSR percentages (C%, S%, R%), strategy classification, and optionally SLA, LDMC, and succulence index.
+#' @return A data frame with calculated CSR percentages (C\%, S\%, R\%), strategy classification, and optionally SLA, LDMC, and succulence index.
 #'
 #' @import dplyr
 #' @export
-#'
-#' @examples
-#' # strateFy(exampleData)
 
-strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
+strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE, useSucculenceRule = TRUE, succulenceThreshold = 5) {
 
   # column renaming helper function
   renameColumnsStratefy <- function(data) {
@@ -88,8 +90,12 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
       removedSpecies
     ))
   }
-  # anti_join to keep rows that do not match defined missingrows based on species column
-  data <- anti_join(data, missingRows, by = "species")
+  # keep rows complete across all required columns, filtered row-by-row so a complete row isn't dropped because a duplicate-named row was incomplete
+  data <- data %>% filter(if_all(all_of(requiredCols), ~ !is.na(.)))
+
+  if (nrow(data) == 0) {
+    stop("No rows remaining after removing missing values.")
+  }
 
   # sla calculation
   if (calcSLA) {
@@ -99,15 +105,20 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
 
   # ldmc calculation
   if (calcLDMC) {
-    data <- data %>%
+    if (useSucculenceRule) {
+      data <- data %>%
       mutate(
         succulenceIndex = (LFW - LDW) / (LA / 10),
         LDMC = ifelse(
-          succulenceIndex > 5,
+          succulenceIndex > succulenceThreshold,
           (100 - (LDW * 100) / LFW),
           (LDW * 100) / LFW
         )
       )
+    } else {
+      data <- data %>%
+        mutate(LDMC = (LDW * 100) / LFW)
+    }
   }
 
   # define bounds and translation constants
@@ -164,40 +175,30 @@ strateFy <- function(data, calcSLA = TRUE, calcLDMC = TRUE) {
     R = c(5, 23, 5, 48, 23, 5, 42, 17, 73, 33, 5, 54, 23, 90, 42, 5, 73, 23, 48)
   )
 
-  # pipeline to calculate closest strategy for each row of the users data set based on C S and R %s
+  # classify each species as the nearest reference strategy by squared distance
+  # (same nearest-point method as the StrateFy Excel tool, but using fixed
+  # reference vectors instead of rebuilding a data frame per row)
+  classifyStrateFy <- function(c, s, r) {
+    if (any(is.na(c(c, s, r)))) {
+      return(NA_character_)
+    }
+    distances <- (zoneValues$C - c)^2 +
+      (zoneValues$S - s)^2 +
+      (zoneValues$R - r)^2
+    zoneValues$strategy[which.min(distances)]
+  }
+
   calculations <- calculations %>%
-    # apply by row instead of whole column
     rowwise() %>%
-    # create class column
-    mutate(
-      strategyClass = {
-        # temp data frame called variances based on earlier zonevalues data frame with predefined strategies
-        variances <- zoneValues %>%
-          # add column to temp dataframe calculating variance between CSR %s and predefined values
-          mutate(
-            variance = (cPercent - C)^2 +
-              (sPercent - S)^2 +
-              (rPercent - R)^2
-          )
-
-        # handle the case where all variances are NA or which.min has nothing to return
-        idx <- which.min(variances$variance)
-
-        if (length(idx) == 0 || all(is.na(variances$variance))) {
-          NA_character_                # no valid minimum -> return NA instead of crashing
-        } else {
-          variances$strategy[idx]      # normal case: nearest strategy
-        }
-      }
-    ) %>%
-    # ungroup from rowwise back to column based
+    mutate(strategyClass = classifyStrateFy(cPercent, sPercent, rPercent)) %>%
     ungroup()
 
 
   # define the output columns
   outputCols <- c("cPercent", "sPercent", "rPercent", "strategyClass")
   if (calcSLA) outputCols <- c("SLA", outputCols)
-  if (calcLDMC) outputCols <- c("LDMC", "succulenceIndex", outputCols)
+  if (calcLDMC) outputCols <- c("LDMC", outputCols)
+  if (calcLDMC && useSucculenceRule) outputCols <- c("succulenceIndex", outputCols)
 
   # determine which columns from `calculations` are NOT already in `data`
   extraCols <- setdiff(outputCols, names(data))
